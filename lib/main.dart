@@ -35,6 +35,19 @@ class _HomeState extends State<Home> {
     });
   }
 
+  void _updateData(context, index) {
+    setState(() {
+      _toDoList.removeAt(index);
+
+      Map<String, dynamic> newToDo = Map();
+      newToDo["title"] = novaTarefaController.text;
+      novaTarefaController.text = "";
+      newToDo["ok"] = false;
+      _toDoList.insert(index, newToDo);
+      _saveData();
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -107,6 +120,32 @@ class _HomeState extends State<Home> {
     }
   }
 
+  void _deleteData(context, index) {
+    setState(() {
+      _lastRemoved = Map.from(_toDoList[index]);
+      _lastRemovedPos = index;
+      _toDoList.removeAt(index);
+
+      _saveData();
+
+      final snack = SnackBar(
+        content: Text("Tarefa \"${_lastRemoved["title"]}\" removida!"),
+        action: SnackBarAction(
+            label: "Desfazer",
+            onPressed: () {
+              setState(() {
+                _toDoList.insert(_lastRemovedPos, _lastRemoved);
+                _saveData();
+              });
+            }),
+        duration: Duration(seconds: 2),
+      );
+
+      Scaffold.of(context).removeCurrentSnackBar();
+      Scaffold.of(context).showSnackBar(snack);
+    });
+  }
+
   Future<Null> _refresh() async {
     await Future.delayed(Duration(seconds: 1));
 
@@ -140,7 +179,52 @@ class _HomeState extends State<Home> {
         ),
         direction: DismissDirection.startToEnd,
         child: CheckboxListTile(
-          title: Text(_toDoList[index]["title"]),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(_toDoList[index]["title"]),
+              Row(
+                children: [
+                  IconButton(
+                      splashRadius: 20,
+                      icon: Icon(Icons.delete),
+                      onPressed: () {
+                        _deleteData(context, index);
+                      }),
+                  IconButton(
+                      splashRadius: 20,
+                      icon: Icon(Icons.edit),
+                      onPressed: () {
+                        novaTarefaController.text = _toDoList[index]["title"];
+                        showDialog(
+                            context: context,
+                            builder: (_) => AlertDialog(
+                                  content: Row(
+                                    children: <Widget>[
+                                      Expanded(
+                                        child: TextField(
+                                            decoration: InputDecoration(
+                                                labelStyle: TextStyle(
+                                                    color: Colors.blueAccent)),
+                                            controller: novaTarefaController),
+                                      ),
+                                      RaisedButton(
+                                        color: Colors.blueAccent,
+                                        child: Text("OK"),
+                                        textColor: Colors.white,
+                                        onPressed: () {
+                                          _updateData(context, index);
+                                          Navigator.pop(context);
+                                        },
+                                      )
+                                    ],
+                                  ),
+                                ));
+                      }),
+                ],
+              )
+            ],
+          ),
           value: _toDoList[index]["ok"],
           secondary: CircleAvatar(
             child: Icon(_toDoList[index]["ok"] ? Icons.check : Icons.error),
@@ -153,29 +237,7 @@ class _HomeState extends State<Home> {
           },
         ),
         onDismissed: (direction) {
-          setState(() {
-            _lastRemoved = Map.from(_toDoList[index]);
-            _lastRemovedPos = index;
-            _toDoList.removeAt(index);
-
-            _saveData();
-
-            final snack = SnackBar(
-              content: Text("Tarefa \"${_lastRemoved["title"]}\" removida!"),
-              action: SnackBarAction(
-                  label: "Desfazer",
-                  onPressed: () {
-                    setState(() {
-                      _toDoList.insert(_lastRemovedPos, _lastRemoved);
-                      _saveData();
-                    });
-                  }),
-              duration: Duration(seconds: 2),
-            );
-
-            Scaffold.of(context).removeCurrentSnackBar();
-            Scaffold.of(context).showSnackBar(snack);
-          });
+          _deleteData(context, index);
         });
   }
 }
