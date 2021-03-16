@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
-import 'package:path_provider/path_provider.dart';
-import 'dart:async';
-import 'dart:io';
-import 'dart:convert';
+import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:lista_de_tarefas/list_controller.dart';
 
 void main() {
   runApp(MaterialApp(
@@ -17,45 +15,13 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> {
-  TextEditingController novaTarefaController = TextEditingController();
-
-  List _toDoList = [];
-
-  Map<String, dynamic> _lastRemoved;
-  int _lastRemovedPos;
-
-  void _addToDo() {
-    setState(() {
-      Map<String, dynamic> newToDo = Map();
-      newToDo["title"] = novaTarefaController.text;
-      novaTarefaController.text = "";
-      newToDo["ok"] = false;
-      _toDoList.add(newToDo);
-      _saveData();
-    });
-  }
-
-  void _updateData(context, index) {
-    setState(() {
-      _toDoList.removeAt(index);
-
-      Map<String, dynamic> newToDo = Map();
-      newToDo["title"] = novaTarefaController.text;
-      novaTarefaController.text = "";
-      newToDo["ok"] = false;
-      _toDoList.insert(index, newToDo);
-      _saveData();
-    });
-  }
+  ListController listController = ListController();
 
   @override
   void initState() {
     super.initState();
-    _readData().then((data) {
-      setState(() {
-        _toDoList = json.decode(data);
-      });
-    });
+    //TODO colocar o initRead
+    listController.initRead();
   }
 
   @override
@@ -77,92 +43,33 @@ class _HomeState extends State<Home> {
                         decoration: InputDecoration(
                             labelText: "Nova Tarefa",
                             labelStyle: TextStyle(color: Colors.blueAccent)),
-                        controller: novaTarefaController),
+                        controller: listController.novaTarefaController),
                   ),
                   RaisedButton(
                     color: Colors.blueAccent,
                     child: Text("ADD"),
                     textColor: Colors.white,
-                    onPressed: _addToDo,
+                    onPressed: () {
+                      listController.addToDo();
+                    },
                   )
                 ],
               ),
             ),
             Expanded(
               child: RefreshIndicator(
-                  child: ListView.builder(
-                      padding: EdgeInsets.only(top: 10.0),
-                      itemCount: _toDoList.length,
-                      itemBuilder: _buildItem),
-                  onRefresh: _refresh),
+                  child: Observer(
+                                      builder: (_) => ListView.builder(
+                        padding: EdgeInsets.only(top: 10.0),
+                        itemCount: listController.toDoList.length,
+                        itemBuilder: _buildItem),
+                  ),
+                  onRefresh: () {
+                    return listController.refresh();
+                  }),
             ),
           ],
         ));
-  }
-
-  Future<File> _getFile() async {
-    final directory = await getApplicationDocumentsDirectory();
-    return File("${directory.path}/data.json");
-  }
-
-  Future<File> _saveData() async {
-    String data = json.encode(_toDoList);
-    final file = await _getFile();
-    return file.writeAsString(data);
-  }
-
-  Future<String> _readData() async {
-    try {
-      final file = await _getFile();
-      return file.readAsString();
-    } catch (e) {
-      return e.toString();
-    }
-  }
-
-  void _deleteData(context, index) {
-    setState(() {
-      _lastRemoved = Map.from(_toDoList[index]);
-      _lastRemovedPos = index;
-      _toDoList.removeAt(index);
-
-      _saveData();
-
-      final snack = SnackBar(
-        content: Text("Tarefa \"${_lastRemoved["title"]}\" removida!"),
-        action: SnackBarAction(
-            label: "Desfazer",
-            onPressed: () {
-              setState(() {
-                _toDoList.insert(_lastRemovedPos, _lastRemoved);
-                _saveData();
-              });
-            }),
-        duration: Duration(seconds: 2),
-      );
-
-      Scaffold.of(context).removeCurrentSnackBar();
-      Scaffold.of(context).showSnackBar(snack);
-    });
-  }
-
-  Future<Null> _refresh() async {
-    await Future.delayed(Duration(seconds: 1));
-
-    setState(() {
-      _toDoList.sort((a, b) {
-        if (a["ok"] && !b["ok"])
-          return 1;
-        else if (!a["ok"] && b["ok"])
-          return -1;
-        else
-          return 0;
-      });
-
-      _saveData();
-    });
-
-    return null;
   }
 
   Widget _buildItem(context, index) {
@@ -178,66 +85,73 @@ class _HomeState extends State<Home> {
               )),
         ),
         direction: DismissDirection.startToEnd,
-        child: CheckboxListTile(
-          title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(_toDoList[index]["title"]),
-              Row(
-                children: [
-                  IconButton(
-                      splashRadius: 20,
-                      icon: Icon(Icons.delete),
-                      onPressed: () {
-                        _deleteData(context, index);
-                      }),
-                  IconButton(
-                      splashRadius: 20,
-                      icon: Icon(Icons.edit),
-                      onPressed: () {
-                        novaTarefaController.text = _toDoList[index]["title"];
-                        showDialog(
-                            context: context,
-                            builder: (_) => AlertDialog(
-                                  content: Row(
-                                    children: <Widget>[
-                                      Expanded(
-                                        child: TextField(
-                                            decoration: InputDecoration(
-                                                labelStyle: TextStyle(
-                                                    color: Colors.blueAccent)),
-                                            controller: novaTarefaController),
+        child: Observer(
+                  builder: (_) => CheckboxListTile(
+            title: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(listController.toDoList[index]["title"]),
+                Row(
+                  children: [
+                    IconButton(
+                        splashRadius: 20,
+                        icon: Icon(Icons.delete),
+                        onPressed: () {
+                          listController.deleteData(context, index);
+                        }),
+                    Observer(
+                                          builder: (_) => IconButton(
+                          splashRadius: 20,
+                          icon: Icon(Icons.edit),
+                          onPressed: () {
+                            listController.novaTarefaController.text =
+                                listController.toDoList[index]["title"];
+                            showDialog(
+                                context: context,
+                                builder: (_) => AlertDialog(
+                                      content: Row(
+                                        children: <Widget>[
+                                          Expanded(
+                                            child: TextField(
+                                                decoration: InputDecoration(
+                                                    labelStyle: TextStyle(
+                                                        color: Colors.blueAccent)),
+                                                controller: listController
+                                                    .novaTarefaController),
+                                          ),
+                                          RaisedButton(
+                                            color: Colors.blueAccent,
+                                            child: Text("OK"),
+                                            textColor: Colors.white,
+                                            onPressed: () {
+                                              listController.updateData(
+                                                  context, index);
+                                              Navigator.pop(context);
+                                            },
+                                          )
+                                        ],
                                       ),
-                                      RaisedButton(
-                                        color: Colors.blueAccent,
-                                        child: Text("OK"),
-                                        textColor: Colors.white,
-                                        onPressed: () {
-                                          _updateData(context, index);
-                                          Navigator.pop(context);
-                                        },
-                                      )
-                                    ],
-                                  ),
-                                ));
-                      }),
-                ],
-              )
-            ],
+                                    ));
+                          }),
+                    ),
+                  ],
+                )
+              ],
+            ),
+            value: listController.toDoList[index]["ok"],
+            secondary: CircleAvatar(
+              child: Icon(listController.toDoList[index]["ok"]
+                  ? Icons.check
+                  : Icons.error),
+            ),
+            onChanged: (c) {
+              listController.toDoList[index]["ok"] = c;
+              listController.saveData();
+            },
           ),
-          value: _toDoList[index]["ok"],
-          secondary: CircleAvatar(
-            child: Icon(_toDoList[index]["ok"] ? Icons.check : Icons.error),
-          ),
-          onChanged: (c) {
-            setState(() {
-              _toDoList[index]["ok"] = c;
-              _saveData();
-            });
-          },
         ),
         onDismissed: (direction) {
-          _deleteData(context, index);
+          listController.deleteData(context, index);
         });
   }
 }
